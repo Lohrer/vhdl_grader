@@ -10,6 +10,8 @@
 # sudo apt install unzip unrar p7zip-full
 
 import sys, os, shutil, re
+import itertools
+import argparse
 from pyunpack import Archive
 from difflib import SequenceMatcher
 
@@ -26,22 +28,24 @@ def get_file_text(filename):
         finally:
             f.close()
 
+parser = argparse.ArgumentParser(description='Check similarities between moodle submissions')
+parser.add_argument('zip_file', type=argparse.FileType(), help='zip file downloaded from moodle with all submissions')
+parser.add_argument('min_diff', type=float, default=0.95, nargs='?', help='min similarity to flag')
+parser.add_argument('--show_diff', action='store_true', default=False, help='show the difference between similar files')
+parser.add_argument('--verbose', '-v', action='store_true', default=False, help='show debug info')
+args = parser.parse_args()
+
 # Supported archive formats for extracting
 archive_extensions = ('.zip', '.rar', '.7z')
 
 # Verify the main archive exists and is a valid format,
 # change to its directory if found.
-if len(sys.argv) == 2:
-    if not os.path.isfile(sys.argv[1]):
-        raise ValueError('Archive file does not exist')
-    labs_archive_path, labs_archive = os.path.split(sys.argv[1])
-    if labs_archive.endswith(archive_extensions):
-        if len(labs_archive_path) > 0:
-            os.chdir(labs_archive_path)
+labs_archive_path, labs_archive = os.path.split(args.zip_file.name)
+if labs_archive.endswith(archive_extensions):
+    if len(labs_archive_path) > 0:
+        os.chdir(labs_archive_path)
     else:
         raise ValueError('Unsuported archive format')
-else:
-    raise ValueError('Usage: comparelabs.py archive.zip')
 
 # Create a subdirectory to extract into, if it already exists remove it
 lab_name = labs_archive.split('-')[2]
@@ -103,37 +107,44 @@ for name in names:
         os.remove(os.path.join(name, file))
 
 # Compare all students for similarity
-# TODO: cut time in half by only comparing each pair once
-for name1 in names:
-    # Get all of name1's files
+for pair in itertools.combinations(names, 2):
+    name1, name2 = pair
+    if args.verbose: print('comparing ' + name1 + ' and ' + name2)
+
+    # Get all of the files
     files1 = os.listdir(name1)
-    for name2 in names:
-        if name2 == name1:
-            continue
+    files2 = os.listdir(name2)
 
-        # Get all of name2's files
-        files2 = os.listdir(name2)
+    # Calculate the average similarity over each of name1's files
+    similarities = []
+    for file1 in files1:
+        file1_text = get_file_text(os.path.join(name1, file1))
+        # Find the file that most similary matches file1
+        max_similarity = 0.0;
+        most_similar_file = ''
+        for file2 in files2:
+            file2_text = get_file_text(os.path.join(name2, file2))
+            sim12 = SequenceMatcher(None, file1_text, file2_text).ratio()
+            if sim12 > max_similarity:
+                max_similarity = sim12
+                most_similar_file = file2
 
-        # Calculate the average similarity over each of name1's files
-        similarities = []
-        for file1 in files1:
-            file1_text = get_file_text(os.path.join(name1, file1))
-            # Find the file that most similary matches file1
-            max_similarity = 0.0;
-            most_similar_file = ''
-            for file2 in files2:
-                file2_text = get_file_text(os.path.join(name2, file2))
-                sim12 = SequenceMatcher(None, file1_text, file2_text).ratio()
-                if sim12 > max_similarity:
-                    max_similarity = sim12
-                    most_similar_file = file2
-            #if max_similarity > 0.95:
-            #    print(file1 + ' is similar to ' + most_similar_file +
-            #        ' to degree ' + str(max_similarity))
-            similarities.append(max_similarity)
-        mean = sum(similarities) / float(len(similarities))
-        if mean > 0.9:
-            print('Student ' + name1 + ' and ' + name2 +
-                ' are similar to degree ' + str(mean))
+        if args.verbose and max_similarity > 0.95:
+            print(file1 + ' is similar to ' + most_similar_file +
+                  ' to degree ' + str(max_similarity))
+        similarities.append((max_similarity, file1, most_similar_file))
+    simsum = 0
+    for sim, f1, f2 in similarities:
+        simsum += sim
+    mean = simsum / float(len(similarities))
+    if mean > args.min_diff:
+        print('Student ' + name1 + ' and ' + name2 + ' are similar to degree ' + str(mean))
+        similarities.sort(key=lambda sim: sim[0], reverse=True)
+        for sim, f1, f2 in similarities:
+            if sim < 0.95: break;
+            print('(%f, %s, %s)' % (sim, f1, f2))
+            if args.show_diff:
+                cmd='diff --ignore-case --ignore-blank-lines --ignore-trailing-space --ignore-space-change "%s/%s" "%s/%s"' % (name1, f1, name2, f2)
+                os.system(cmd)
 
 # TODO: Verify existence of testbenches
