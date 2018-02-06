@@ -44,8 +44,8 @@ labs_archive_path, labs_archive = os.path.split(args.zip_file.name)
 if labs_archive.endswith(archive_extensions):
     if len(labs_archive_path) > 0:
         os.chdir(labs_archive_path)
-    else:
-        raise ValueError('Unsuported archive format')
+else:
+    raise ValueError('Unsuported archive format')
 
 # Create a subdirectory to extract into, if it already exists remove it
 lab_name = labs_archive.split('-')[2]
@@ -98,7 +98,7 @@ for dir in os.listdir('.'):
 names = os.listdir('.') # Create a list of students
 for name in names:
     files = os.listdir(name)
-    xdc_files = [xdc for xdc in files if xdc.endswith('.xdc')]
+    xdc_files = [xdc for xdc in files if xdc.lower().endswith('.xdc')]
     if len(xdc_files) > 1:
         print(name + ' has multiple XDC files.')
     elif not xdc_files:
