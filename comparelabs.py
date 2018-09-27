@@ -5,9 +5,9 @@
 # directory.
 
 # Requirements:
+# sudo apt install unzip unrar p7zip-full python3-pip
 # sudo -H pip3 install --upgrade pip
 # sudo -H pip3 install pyunpack patool entrypoint2
-# sudo apt install unzip unrar p7zip-full
 
 import os
 import argparse
