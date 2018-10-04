@@ -1,31 +1,38 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import shutil
 from pyunpack import Archive
 
 # Supported archive formats for extracting
 archive_extensions = ('.zip', '.rar', '.7z')
 
+# Comment characters for filetypes
+comment_chars = {'.vhd': '--', '.xdc': '#'}
+
 
 # Read file and strip comments and blank lines
-def get_file_text(filename):
+def read_code_file(filepath):
     try:
-        f = open(filename)
+        f = open(filepath)
     except OSError:
-        print('Error opening file ' + filename)
+        print('Error opening file ' + filepath)
         return ''
     else:
         try:
+            # Read text while filtering out comments
+            filename, extension = os.path.splitext(filepath)
+            comment_char = comment_chars[extension]
             text = ''
             for line in f:
-                line = line.partition('--')[0]
+                line = line.partition(comment_char)[0]
                 line = line.strip()
                 if len(line) > 0:
                     text += line + '\n'
             return text
         except:
-            print('Error reading file ' + filename)
+            print('Error reading file ' + filepath)
             return ''
         finally:
             f.close()
@@ -42,7 +49,12 @@ def parse_moodle_submissions(zip_file):
         raise ValueError('Unsuported archive format')
 
     # Create a subdirectory to extract into, if it already exists remove it
-    lab_name = labs_archive.split('-')[2]
+    matches = re.search('lab ?[0-9]+', labs_archive, re.I)
+    if matches:
+        lab_name = matches.group(0)
+    else:
+        lab_name = 'lab'
+        print('Warning: Archive name does not include "lab #", using name "lab"')
     if os.path.isdir(lab_name):
         shutil.rmtree(lab_name)
     os.mkdir(lab_name)

@@ -14,12 +14,16 @@ import argparse
 from difflib import SequenceMatcher
 import extractor
 
+diff_cmd = 'diff --ignore-case --ignore-blank-lines --ignore-trailing-space' \
+           '--ignore-space-change "%s/%s" "%s/%s"'
+
 
 def main():
     parser = argparse.ArgumentParser(
         description='Check similarities between moodle submissions')
     parser.add_argument('zip_file', type=argparse.FileType(),
-                        help='zip file downloaded from moodle with all submissions')
+                        help='zip file downloaded from moodle with all'
+                             'submissions')
     parser.add_argument('min_diff', type=float, default=0.95, nargs='?',
                         help='min similarity to flag')
     parser.add_argument('--show_diff', action='store_true', default=False,
@@ -27,9 +31,11 @@ def main():
     parser.add_argument('--verbose', '-v', action='store_true', default=False,
                         help='show debug info')
     parser.add_argument('--quick', '-q', action='store_true', default=False,
-                        help='faster file comparison that returns an upper bound')
-    parser.add_argument('--realquick', '-qq', action='store_true', default=False,
-                        help='even faster file comparison that returns an upper bound')
+                        help='faster file comparison that returns an upper'
+                             'bound')
+    parser.add_argument('--realquick', '-qq', action='store_true',
+                        default=False, help='even faster file comparison that'
+                                            'returns an upper bound')
     args = parser.parse_args()
 
     # Extract main archive file into student subdirectories
@@ -44,16 +50,14 @@ def main():
             print(name + ' has multiple XDC files.')
         elif not xdc_files:
             print(name + ' has no XDC file.')
-        for file in xdc_files:
-            os.remove(os.path.join(name, file))
 
-    # Compare all students for similarity
-    file_dict = {}
-    for i in range(len(names)):
-        # Add the new student's files to the dictionary
-        name1 = names[i]
-        file_dict[name1] = {f: extractor.get_file_text(os.path.join(name1, f))
-                            for f in os.listdir(name1)}
+    # Compare all students for similarity (VHDL and XDC files only)
+    files = {}
+    for i, name1 in enumerate(names):
+        # Add the new student's VHDL files to the dictionary
+        files[name1] = {f: extractor.read_code_file(os.path.join(name1, f))
+                        for f in os.listdir(name1)
+                        if f.lower().endswith(('.vhd', '.xdc'))}
 
         # Compare each student to every student before them
         # Since every preceding student's files have been read,
@@ -65,11 +69,11 @@ def main():
 
             # Calculate the average similarity over each of name1's files
             similarities = []
-            for file1, file1_text in file_dict[name1].items():
+            for file1, file1_text in files[name1].items():
                 # Find the file that most similarly matches file1
-                max_similarity = 0.0;
+                max_similarity = 0.0
                 most_similar_file = ''
-                for file2, file2_text in file_dict[name2].items():
+                for file2, file2_text in files[name2].items():
                     sm = SequenceMatcher(None, file1_text, file2_text)
                     if args.realquick:
                         sim12 = sm.real_quick_ratio()
@@ -81,25 +85,22 @@ def main():
                         max_similarity = sim12
                         most_similar_file = file2
 
-                if args.verbose and max_similarity > 0.95:
+                if args.verbose and max_similarity > args.min_diff:
                     print(file1 + ' is similar to ' + most_similar_file +
                           ' to degree ' + str(max_similarity))
                 similarities.append((max_similarity, file1, most_similar_file))
-            simsum = 0
-            for sim, f1, f2 in similarities:
-                simsum += sim
-            mean = simsum / float(len(similarities))
+
+            mean = sum(s[0] for s in similarities) / len(similarities)
             if mean > args.min_diff:
                 print('Student ' + name1 + ' and ' + name2 +
                       ' are similar to degree ' + str(mean))
                 similarities.sort(key=lambda sim: sim[0], reverse=True)
                 for sim, f1, f2 in similarities:
-                    if sim < 0.95: break;
-                    print('(%f, %s, %s)' % (sim, f1, f2))
-                    if args.show_diff:
-                        cmd = 'diff --ignore-case --ignore-blank-lines --ignore-trailing-space --ignore-space-change "%s/%s" "%s/%s"' % (
-                        name1, f1, name2, f2)
-                        os.system(cmd)
+                    if sim > args.min_diff:
+                        print('(%f, %s, %s)' % (sim, f1, f2))
+                        if args.show_diff:
+                            cmd = diff_cmd % (name1, f1, name2, f2)
+                            os.system(cmd)
 
     # TODO: Verify existence of testbenches
 
