@@ -1,0 +1,5 @@
+.idea/*
+.directory
+*.pyc
+*.zip
+[lL]ab*/*
