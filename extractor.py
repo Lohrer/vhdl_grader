@@ -98,3 +98,7 @@ def parse_moodle_submissions(zip_file):
                     for d in dirnames:
                         os.rmdir(os.path.join(dirpath, d))
                 os.rmdir(path)  # TODO: Remove any leftover non-.vhd/.xdc files
+
+        # If the student directory is empty, remove it.
+        if not os.listdir(name):
+          os.rmdir(name)
