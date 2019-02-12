@@ -37,6 +37,18 @@ def read_code_file(filepath):
         finally:
             f.close()
 
+# Recursively search for archives to extract below the base_path.
+# Returns the number of archives extracted.
+def extract_archives(base_path):
+    num_archives = 0
+    for dirpath, dirnames, filenames in os.walk(base_path):
+        for file in filenames:
+            if file.lower().endswith(archive_extensions):
+                num_archives += 1
+                filepath = os.path.join(dirpath, file)
+                Archive(filepath).extractall(base_path)
+                os.remove(filepath)
+    return num_archives
 
 def parse_moodle_submissions(zip_file):
     # Verify the main archive exists and is a valid format,
@@ -75,13 +87,8 @@ def parse_moodle_submissions(zip_file):
             name = student_dir
 
         # Unpack any zip/rar/etc files for the current student
-        # TODO: Handle archives inside archives
-        for dirpath, dirnames, filenames in os.walk(name):
-            for file in filenames:
-                if file.lower().endswith(archive_extensions):
-                    filepath = os.path.join(dirpath, file)
-                    Archive(filepath).extractall(name)
-                    os.remove(filepath)
+        while (extract_archives(name) > 0):
+          pass
 
         # Move any .vhd and .xdc files in subdirs to the student's directory
         # Delete the (now empty) subdirectories
@@ -101,4 +108,4 @@ def parse_moodle_submissions(zip_file):
 
         # If the student directory is empty, remove it.
         if not os.listdir(name):
-          os.rmdir(name)
+            os.rmdir(name)
